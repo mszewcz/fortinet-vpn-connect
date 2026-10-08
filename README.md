@@ -14,7 +14,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Connect to Fortinet VPN
-        uses: ./.github/actions/fortinet-vpn
+        uses: mszewcz/fortinet-vpn-connect@1.0.0
         with:
           VPN_HOST: ${{ secrets.VPN_HOST }}
           VPN_PORT: ${{ secrets.VPN_PORT }}
@@ -22,8 +22,7 @@ jobs:
           VPN_PASSWORD: ${{ secrets.VPN_PASSWORD }}
           VPN_TRUSTED_CERT: ${{ secrets.VPN_TRUSTED_CERT }}
 
-      # Tu kroki wymagające dostępu do sieci za VPN, np.:
-      # - run: curl -sf http://10.0.0.10/health
+      - name: Do your stuff
 
       - name: Disconnect VPN
         if: always()
