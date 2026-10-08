@@ -1,0 +1,78 @@
+name: Fortinet VPN connect
+description: Connects the runner to a Fortinet SSL VPN using openfortivpn
+author: "mszewcz"
+
+inputs:
+  VPN_HOST:
+    description: VPN gateway host
+    required: true
+  VPN_PORT:
+    description: VPN gateway port
+    required: false
+    default: "443"
+  VPN_USER:
+    description: VPN username
+    required: true
+  VPN_PASSWORD:
+    description: VPN password
+    required: true
+  VPN_TRUSTED_CERT:
+    description: SHA256 digest of the gateway certificate (needed when the certificate is not trusted by a public CA)
+    required: false
+    default: ""
+  TIMEOUT:
+    description: Seconds to wait for the tunnel to come up
+    required: false
+    default: "60"
+
+runs:
+  using: composite
+  steps:
+    - name: Install openfortivpn
+      shell: bash
+      run: |
+        sudo apt-get update -qq
+        sudo apt-get install -y -qq openfortivpn
+
+    - name: Connect
+      shell: bash
+      env:
+        VPN_HOST: ${{ inputs.VPN_HOST }}
+        VPN_PORT: ${{ inputs.VPN_PORT }}
+        VPN_USER: ${{ inputs.VPN_USER }}
+        VPN_PASSWORD: ${{ inputs.VPN_PASSWORD }}
+        VPN_TRUSTED_CERT: ${{ inputs.VPN_TRUSTED_CERT }}
+        TIMEOUT: ${{ inputs.TIMEOUT }}
+      run: |
+        echo "::add-mask::$VPN_PASSWORD"
+
+        CONFIG=/tmp/openfortivpn.conf
+        LOG=/tmp/openfortivpn.log
+        umask 077
+        {
+          echo "host = $VPN_HOST"
+          echo "port = ${VPN_PORT:-443}"
+          echo "username = $VPN_USER"
+          echo "password = $VPN_PASSWORD"
+          if [ -n "$VPN_TRUSTED_CERT" ]; then
+            echo "trusted-cert = $VPN_TRUSTED_CERT"
+          fi
+        } > "$CONFIG"
+
+        sudo nohup openfortivpn -c "$CONFIG" > "$LOG" 2>&1 &
+
+        for _ in $(seq "$TIMEOUT"); do
+          if grep -q "Tunnel is up and running" "$LOG"; then
+            echo "VPN connected"
+            ip addr show ppp0
+            exit 0
+          fi
+          if ! pgrep -x openfortivpn > /dev/null; then
+            break
+          fi
+          sleep 1
+        done
+
+        echo "::error::VPN connection failed"
+        cat "$LOG"
+        exit 1
